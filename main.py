@@ -1,7 +1,11 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from pydantic import BaseModel, Field
 from typing import Dict, Any, Optional
-import services
+from services import (
+    parse_cluster_config,
+    process_media_thumbnail,
+    forward_webhook_notification
+)
 
 app = FastAPI(
     title="CloudPulse API",
@@ -42,32 +46,32 @@ def get_system_status():
 def sync_cluster_configuration(payload: ConfigPayload):
     """
     Parses and syncs cluster topology from YAML.
-    Reaches: services.parse_cluster_config -> yaml.load
+    Reaches: parse_cluster_config -> yaml.load (PyYAML CVE)
     """
     if not payload.raw_yaml:
         raise HTTPException(status_code=400, detail="Configuration document is required")
-    result = services.parse_cluster_config(payload.raw_yaml)
+    result = parse_cluster_config(payload.raw_yaml)
     return {"message": "Configuration ingested", "data": result}
 
 @app.post("/api/v1/media/avatar")
 async def process_user_avatar(file: UploadFile = File(...)):
     """
     Resizes user profile avatar.
-    Reaches: services.process_media_thumbnail -> PIL.Image.open
+    Reaches: process_media_thumbnail -> PIL.Image.open (Pillow CVE)
     """
     content = await file.read()
     if not content:
         raise HTTPException(status_code=400, detail="Empty image payload")
-    result = services.process_media_thumbnail(content)
+    result = process_media_thumbnail(content)
     return result
 
 @app.post("/api/v1/webhooks/dispatch")
 def dispatch_webhook_telemetry(payload: WebhookDispatchPayload):
     """
     Dispatches telemetry events to third-party receivers.
-    Reaches: services.forward_webhook_notification -> requests.post
+    Reaches: forward_webhook_notification -> requests.post (Requests CVE)
     """
-    result = services.forward_webhook_notification(payload.destination_url, payload.details)
+    result = forward_webhook_notification(payload.destination_url, payload.details)
     return result
 
 if __name__ == "__main__":
